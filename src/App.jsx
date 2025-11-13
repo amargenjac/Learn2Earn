@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  Navigate
+} from 'react-router-dom';
 import { VeChainKitProvider, TransactionModalProvider } from '@vechain/vechain-kit';
 import WalletConnection from './components/WalletConnection';
 import StudentRegistration from './components/StudentRegistration';
 import ProofSubmissionForm from './components/ProofSubmissionForm';
 import ClaimReward from './components/ClaimReward';
+import RegistrarDashboard from './components/RegistrarDashboard';
+import RewardDistribution from './components/RewardDistribution';
 import { checkSubmissionStatus } from './services/api';
-import { CONTRACT_ADDRESS } from './config/contract';
+import './App.css';
 
-function AppContent() {
+function AppContent () {
   const [account, setAccount] = useState(null);
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [isApproved, setIsApproved] = useState(false);
@@ -22,19 +31,16 @@ function AppContent() {
 
   const checkStatus = async () => {
     try {
-      // Check backend API status
       const status = await checkSubmissionStatus(account);
       setSubmissionStatus(status);
-      
-      // If we have backend data, use it to set all states
+
       if (status) {
         const approved = status.approved === true;
         const claimed = status.claimed === true;
-        
+
         setIsApproved(approved);
         setIsClaimed(claimed);
-        
-        // If they have submitted, approved, or claimed - they must be registered
+
         if (status.submitted || status.approved || status.claimed) {
           setIsRegistered(true);
         }
@@ -51,115 +57,129 @@ function AppContent() {
 
   const handleRegistrationSuccess = () => {
     setIsRegistered(true);
-    setTimeout(() => {
-      checkStatus();
-    }, 2000);
+    setTimeout(() => checkStatus(), 2000);
   };
 
   return (
-    <div className="container">
-      <header className="header">
-        <h1>Learn2Earn</h1>
-        <p>Complete learning tasks and earn B3TR tokens</p>
-      </header>
+    <Router>
+      <div className="container">
+        <header className="header">
+          <div>
+            <h1>Learn2Earn</h1>
+            <p>Complete learning tasks and earn B3TR tokens</p>
+          </div>
+          <WalletConnection onAccountChange={setAccount} />
+        </header>
 
-      <div className="wallet-section">
-        <WalletConnection onAccountChange={setAccount} />
-      </div>
+        {/* Navigation Tabs */}
+        <nav className="nav-tabs">
+          <Link to="/">Home</Link>
+          <Link to="/claim">Claim Reward</Link>
+          <Link to="/distribution">Reward Distribution</Link>
+          <Link to="/registrar">Registrar Panel</Link>
+        </nav>
 
-      {account && (
-        <>
-          {!isRegistered && (
-            <StudentRegistration 
-              account={account} 
-              onRegistrationSuccess={handleRegistrationSuccess}
-              onRegistrationStatusChange={setIsRegistered}
-            />
+        <main className="main-content">
+          {!account && (
+            <div className="card">
+              <p style={{ textAlign: 'center', color: '#666' }}>
+                Please connect your VeWorld wallet to get started
+              </p>
+            </div>
           )}
 
-          {isRegistered && (
-            <>
-              {/* Show final claimed state */}
-              {(isClaimed || submissionStatus?.claimed) ? (
-                <div className="card">
-                  <div className="reward-section">
-                    <h3>✅ Reward Successfully Claimed!</h3>
-                    <p>Your B3TR tokens have been distributed to your wallet.</p>
-                    <div className="status-message success">
-                      Claimed on: {new Date(submissionStatus?.claimedAt).toLocaleDateString()}
-                    </div>
-                    {submissionStatus?.transactionHash && (
-                      <div style={{ marginTop: '1rem' }}>
-                        <a
-                          href={`https://explore-testnet.vechain.org/transactions/${submissionStatus.transactionHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'inline-block',
-                            padding: '0.5rem 1rem',
-                            backgroundColor: '#007bff',
-                            color: 'white',
-                            textDecoration: 'none',
-                            borderRadius: '4px',
-                            fontSize: '0.9rem'
-                          }}
-                        >
-                          View Transaction on Explorer
-                        </a>
+          {account && (
+            <Routes>
+              {/* === STUDENT WORKFLOW === */}
+              <Route
+                path="/"
+                element={
+                  !isRegistered ? (
+                    <StudentRegistration
+                      account={account}
+                      onRegistrationSuccess={handleRegistrationSuccess}
+                      onRegistrationStatusChange={setIsRegistered}
+                    />
+                  ) : isClaimed || submissionStatus?.claimed ? (
+                    <div className="card">
+                      <div className="reward-section">
+                        <h3>✅ Reward Successfully Claimed!</h3>
+                        <p>Your B3TR tokens have been distributed to your wallet.</p>
+                        <div className="status-message success">
+                          Claimed on:{' '}
+                          {submissionStatus?.claimedAt
+                            ? new Date(submissionStatus.claimedAt).toLocaleDateString()
+                            : 'N/A'}
+                        </div>
+                        {submissionStatus?.transactionHash && (
+                          <div style={{ marginTop: '1rem' }}>
+                            <a
+                              href={`https://explore-testnet.vechain.org/transactions/${submissionStatus.transactionHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn"
+                            >
+                              View Transaction on Explorer
+                            </a>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              ) : (isApproved || submissionStatus?.approved) ? (
-                /* Show claim reward section */
-                <div className="card">
-                  <ClaimReward account={account} />
-                </div>
-              ) : (
-                /* Show submission form and status */
-                <div className="card">
-                  <h2>Submit Your Proof of Learning</h2>
-                  <ProofSubmissionForm 
-                    account={account}
-                    onSubmissionSuccess={handleSubmissionSuccess}
-                    disabled={submissionStatus?.submitted}
-                  />
-                  {submissionStatus?.submitted && !submissionStatus?.approved && (
-                    <div className="status-message info">
-                      Your submission is under review. Please check back later.
                     </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
+                  ) : isApproved || submissionStatus?.approved ? (
+                    <div className="card">
+                      <ClaimReward account={account} />
+                    </div>
+                  ) : (
+                    <div className="card">
+                      <h2>Submit Your Proof of Learning</h2>
+                      <ProofSubmissionForm
+                        account={account}
+                        onSubmissionSuccess={handleSubmissionSuccess}
+                        disabled={submissionStatus?.submitted}
+                      />
+                      {submissionStatus?.submitted && !submissionStatus?.approved && (
+                        <div className="status-message info">
+                          Your submission is under review. Please check back later.
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+              />
 
-      {!account && (
-        <div className="card">
-          <p style={{ textAlign: 'center', color: '#666' }}>
-            Please connect your VeWorld wallet to get started
-          </p>
-        </div>
-      )}
-    </div>
+              {/* === CLAIM PAGE === */}
+              <Route path="/claim" element={<ClaimReward account={account} />} />
+
+              {/* === REWARD DISTRIBUTION (ADMIN) === */}
+              <Route path="/distribution" element={<RewardDistribution account={account} />} />
+
+              {/* === REGISTRAR PANEL === */}
+              <Route path="/registrar" element={<RegistrarDashboard />} />
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          )}
+        </main>
+      </div>
+    </Router>
   );
 }
 
-function App() {
+function App () {
   return (
     <VeChainKitProvider
       network={{
         type: 'test',
         nodeUrl: 'https://testnet.vechain.org/',
-        genesisId: '0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127'
+        genesisId:
+          '0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127',
       }}
       dappKit={{
         nodeUrl: 'https://testnet.vechain.org/',
         genesis: 'test',
         walletConnectOptions: {
-          projectId: 'YOUR_WALLET_CONNECT_PROJECT_ID', 
+          projectId: 'YOUR_WALLET_CONNECT_PROJECT_ID',
           metadata: {
             name: 'Learn2Earn',
             description: 'VeChain Education Platform',
@@ -169,7 +189,7 @@ function App() {
         },
         usePersistence: true,
         useFirstDetectedSource: false,
-        allowedWallets: ['veworld', 'sync2', 'wallet-connect']
+        allowedWallets: ['veworld', 'sync2', 'wallet-connect'],
       }}
       loginMethods={['vechain', 'wallet']}
     >
